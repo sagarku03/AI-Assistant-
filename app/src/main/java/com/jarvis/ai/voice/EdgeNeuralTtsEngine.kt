@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,13 +24,13 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * 100% FREE High-Fidelity Microsoft Edge Neural TTS Engine for Project JARVIS.
- * Produces ultra-natural human speech (not robotic) with breathing and authentic inflection.
- * Supported voices:
- * - "hi-IN-MadhurNeural" (Natural conversational Hindi Male)
- * - "hi-IN-SwaraNeural" (Natural conversational Hindi Female)
- * - "en-US-ChristopherNeural" (Deep, authoritative, calm authentic JARVIS voice)
- * - "en-IN-PrabhatNeural" (Natural Indian English)
+ * 100% FREE High-Fidelity Microsoft Edge Neural TTS Engine for Project JARVIS
+ * with Automatic Native Android TextToSpeech Fallback.
+ *
+ * Spoken Voice Rules:
+ * - 0% Robotic: Authentic human intonation, natural breathing and pauses.
+ * - Zero Emojis or Markdown Symbols Spoken: Strips `*`, `**`, `#`, emojis, code blocks, URLs.
+ * - Dual Engine Architecture: Edge Neural Cloud WebSocket -> Fallback to On-Device Android TTS.
  */
 class EdgeNeuralTtsEngine(
     private val context: Context,
@@ -41,10 +42,12 @@ class EdgeNeuralTtsEngine(
     private val scope = CoroutineScope(Dispatchers.IO)
     private var mediaPlayer: MediaPlayer? = null
     private var currentWebSocket: WebSocket? = null
+    private var nativeTts: TextToSpeech? = null
+    private var isNativeTtsReady = false
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
+        .connectTimeout(6, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
         .build()
 
     companion object {
@@ -56,8 +59,25 @@ class EdgeNeuralTtsEngine(
         const val VOICE_INDIAN_ENGLISH = "en-IN-PrabhatNeural"
     }
 
+    init {
+        // Initialize On-Device Android TextToSpeech as reliable zero-failure fallback
+        try {
+            nativeTts = TextToSpeech(context) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    val result = nativeTts?.setLanguage(Locale("hi", "IN"))
+                    if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        nativeTts?.setLanguage(Locale.ENGLISH)
+                    }
+                    isNativeTtsReady = true
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     /**
-     * Speaks the given text using human neural synthesis with barge-in support.
+     * Speaks cleaned text using Edge Neural synthesis, falling back to on-device TTS.
      */
     fun speak(
         text: String,
@@ -65,16 +85,49 @@ class EdgeNeuralTtsEngine(
         rate: String = "+0%",
         pitch: String = "+0Hz"
     ) {
-        stop() // Stop any previous speech immediately for instant interruption
+        stop() // Immediate Barge-In
+
+        val cleanText = sanitizeSpokenText(text)
+        if (cleanText.isBlank()) return
 
         scope.launch {
             try {
-                synthesizeAndPlay(text, voiceName, rate, pitch)
+                synthesizeAndPlay(cleanText, voiceName, rate, pitch)
             } catch (e: Exception) {
                 e.printStackTrace()
-                mainHandler.post { onError(e.message ?: "Edge TTS synthesis failure") }
+                fallbackToNativeTts(cleanText)
             }
         }
+    }
+
+    /**
+     * Cleans raw text into human-readable spoken words:
+     * - Replaces code blocks with a brief spoken note.
+     * - Removes Markdown symbols (*, **, #, `).
+     * - Removes emojis, URLs, and bracket tags.
+     */
+    fun sanitizeSpokenText(raw: String): String {
+        var clean = raw
+
+        // 1. Replace multi-line code blocks
+        clean = clean.replace(Regex("```[\\s\\S]*?```"), "Code generate ho gaya hai.")
+
+        // 2. Remove inline code backticks
+        clean = clean.replace(Regex("`([^`]+)`"), "$1")
+
+        // 3. Remove URLs
+        clean = clean.replace(Regex("https?://\\S+"), "link")
+
+        // 4. Remove Markdown headings, bold, italic, bullets
+        clean = clean.replace(Regex("[#*_~>]+"), " ")
+
+        // 5. Remove emojis and non-standard symbols
+        clean = clean.replace(Regex("[\\p{So}\\p{Cn}\\p{Cs}]"), "")
+
+        // 6. Clean excess whitespace
+        clean = clean.replace(Regex("\\s+"), " ").trim()
+
+        return clean
     }
 
     private fun synthesizeAndPlay(
@@ -98,37 +151,23 @@ class EdgeNeuralTtsEngine(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 // 1. Send speech.config
                 val timestamp = SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.US).format(Date())
-                val configPayload = "X-Timestamp:$timestamp\r\n" +
-                        "Content-Type:application/json; charset=utf-8\r\n" +
-                        "Path:speech.config\r\n\r\n" +
-                        "{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":{\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"false\"},\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}"
-                webSocket.send(configPayload)
+                val configHeader = "X-Timestamp:$timestamp\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n"
+                val configBody = "{\"context\":{\"system\":{\"name\":\"SpeechSDK\",\"version\":\"1.26.0\",\"build\":\"JavaScript\",\"lang\":\"JavaScript\"}}}"
+                webSocket.send("$configHeader$configBody")
 
-                // 2. Send SSML text payload
-                val ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='en-US'>" +
-                        "<voice name='$voiceName'>" +
-                        "<prosody pitch='$pitch' rate='$rate'>" +
-                        xmlEscape(text) +
-                        "</prosody></voice></speak>"
+                // 2. Send SSML request
+                val ssml = """
+                    <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
+                        <voice name='$voiceName'>
+                            <prosody pitch='$pitch' rate='$rate'>
+                                ${xmlEscape(text)}
+                            </prosody>
+                        </voice>
+                    </speak>
+                """.trimIndent()
 
-                val ssmlPayload = "X-RequestId:$requestId\r\n" +
-                        "Content-Type:application/ssml+xml\r\n" +
-                        "X-Timestamp:$timestamp\r\n" +
-                        "Path:ssml\r\n\r\n" +
-                        ssml
-                webSocket.send(ssmlPayload)
-            }
-
-            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                val data = bytes.toByteArray()
-                // Edge TTS returns a 2-byte header length, followed by header text, followed by raw MP3 audio
-                if (data.size > 2) {
-                    val headerLength = ((data[0].toInt() and 0xFF) shl 8) or (data[1].toInt() and 0xFF)
-                    val audioOffset = headerLength + 2
-                    if (data.size > audioOffset) {
-                        audioStream.write(data, audioOffset, data.size - audioOffset)
-                    }
-                }
+                val ssmlHeader = "X-RequestId:$requestId\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:$timestamp\r\nPath:ssml\r\n\r\n"
+                webSocket.send("$ssmlHeader$ssml")
             }
 
             override fun onMessage(webSocket: WebSocket, textMessage: String) {
@@ -137,14 +176,65 @@ class EdgeNeuralTtsEngine(
                     val audioBytes = audioStream.toByteArray()
                     if (audioBytes.isNotEmpty()) {
                         playMp3Bytes(audioBytes)
+                    } else {
+                        fallbackToNativeTts(text)
+                    }
+                }
+            }
+
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                val byteArray = bytes.toByteArray()
+                val needle = "Path:audio\r\n".toByteArray(Charsets.UTF_8)
+                val headerEnd = findSubArray(byteArray, needle)
+
+                if (headerEnd != -1) {
+                    val audioOffset = headerEnd + needle.size
+                    if (audioOffset < byteArray.size) {
+                        audioStream.write(byteArray, audioOffset, byteArray.size - audioOffset)
                     }
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                mainHandler.post { onError("WebSocket connection error: ${t.message}") }
+                t.printStackTrace()
+                fallbackToNativeTts(text)
             }
         })
+    }
+
+    private fun fallbackToNativeTts(cleanText: String) {
+        mainHandler.post {
+            try {
+                if (isNativeTtsReady && nativeTts != null) {
+                    onPlaybackStarted()
+                    nativeTts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, "jarvis_fallback")
+                    mainHandler.postDelayed({
+                        onPlaybackCompleted()
+                    }, (cleanText.length * 75L).coerceAtLeast(1500L))
+                } else {
+                    onError("Audio playback unavailable")
+                    onPlaybackCompleted()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onError("TTS Fallback failed: ${e.message}")
+                onPlaybackCompleted()
+            }
+        }
+    }
+
+    private fun findSubArray(large: ByteArray, small: ByteArray): Int {
+        for (i in 0..large.size - small.size) {
+            var match = true
+            for (j in small.indices) {
+                if (large[i + j] != small[j]) {
+                    match = false
+                    break
+                }
+            }
+            if (match) return i
+        }
+        return -1
     }
 
     private fun playMp3Bytes(bytes: ByteArray) {
@@ -167,17 +257,19 @@ class EdgeNeuralTtsEngine(
                         }
                         setOnErrorListener { _, _, _ ->
                             tempAudioFile.delete()
+                            fallbackToNativeTts(tempAudioFile.name)
                             true
                         }
                         prepareAsync()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    onError("Audio playback failed: ${e.message}")
+                    fallbackToNativeTts(tempAudioFile.name)
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            fallbackToNativeTts("")
         }
     }
 
@@ -195,13 +287,24 @@ class EdgeNeuralTtsEngine(
                 it.release()
             }
             mediaPlayer = null
+            nativeTts?.stop()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
     fun isSpeaking(): Boolean {
-        return mediaPlayer?.isPlaying == true
+        return mediaPlayer?.isPlaying == true || nativeTts?.isSpeaking == true
+    }
+
+    fun shutdown() {
+        stop()
+        try {
+            nativeTts?.shutdown()
+            nativeTts = null
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun xmlEscape(input: String): String {

@@ -1,5 +1,7 @@
 package com.jarvis.ai
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,6 +17,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.jarvis.ai.storage.PreferencesManager
 import com.jarvis.ai.ui.components.OrbState
 import com.jarvis.ai.ui.screens.CodeSandboxScreen
 import com.jarvis.ai.ui.screens.DashboardScreen
@@ -35,12 +40,27 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        // Request runtime permissions if not already granted
+        val requiredPermissions = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requiredPermissions.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if (requiredPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, requiredPermissions.toTypedArray(), 101)
+        }
+
         setContent {
             JarvisTheme {
+                val prefs = remember { PreferencesManager.getInstance(this@MainActivity) }
                 var currentScreen by remember { mutableStateOf(Screen.DASHBOARD) }
                 var orbState by remember { mutableStateOf(OrbState.IDLE) }
                 var audioLevel by remember { mutableFloatStateOf(0.15f) }
-                var statusLog by remember { mutableStateOf("Standby • Listening for 'Hey Jarvis'") }
+                var statusLog by remember { mutableStateOf("Standby • Ready") }
 
                 DisposableEffect(Unit) {
                     val voiceCoordinator = JarvisVoiceCoordinator(
@@ -49,7 +69,7 @@ class MainActivity : ComponentActivity() {
                         onAudioAmplitude = { amp -> audioLevel = amp },
                         onStatusLog = { log -> statusLog = log }
                     ).also {
-                        it.initialize()
+                        it.initialize(prefs.geminiApiKey)
                     }
                     coordinator = voiceCoordinator
 
