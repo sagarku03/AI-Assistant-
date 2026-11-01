@@ -195,6 +195,53 @@ class JarvisVoiceCoordinator(
                     )
                 }
 
+                IntentType.SCREEN_READ -> {
+                    onOrbStateChanged(OrbState.EXECUTING)
+                    if (!prefs.isScreenVisionEnabled) {
+                        val disabledMsg = "Screen Vision abhi off hai boss. Settings me jakar 'Screen Vision AI' toggle enable karein."
+                        messages.add(ChatMessage(text = disabledMsg, isUser = false))
+                        onStatusLog(disabledMsg)
+                        ttsEngine.speak(disabledMsg, voiceName = prefs.selectedVoice, rate = prefs.voiceRate, pitch = prefs.voicePitch)
+                        return@launch
+                    }
+
+                    onStatusLog("Scanning screen with Gemini 3.8 Flash...")
+                    val service = JarvisAccessibilityService.instance
+                    if (service != null) {
+                        service.takeScreenSnapshot { bitmap ->
+                            scope.launch {
+                                if (bitmap != null) {
+                                    val description = brainClient.analyzeScreenImage(bitmap, inputText)
+                                    messages.add(ChatMessage(text = description, isUser = false))
+                                    onStatusLog("Screen read complete.")
+                                    ttsEngine.speak(description, voiceName = prefs.selectedVoice, rate = prefs.voiceRate, pitch = prefs.voicePitch)
+                                } else {
+                                    val failMsg = "Screen capture nahi ho paayi. Kripya check karein ki Accessibility permission on hai."
+                                    messages.add(ChatMessage(text = failMsg, isUser = false))
+                                    ttsEngine.speak(failMsg, voiceName = prefs.selectedVoice, rate = prefs.voiceRate, pitch = prefs.voicePitch)
+                                }
+                            }
+                        }
+                    } else {
+                        val failMsg = "Accessibility Service active nahi hai. Settings me jakar JARVIS Accessibility enable karein."
+                        messages.add(ChatMessage(text = failMsg, isUser = false))
+                        ttsEngine.speak(failMsg, voiceName = prefs.selectedVoice, rate = prefs.voiceRate, pitch = prefs.voicePitch)
+                    }
+                }
+
+                IntentType.SCREEN_CLICK -> {
+                    onOrbStateChanged(OrbState.EXECUTING)
+                    val target = decision.targetButtonText ?: inputText
+                    onStatusLog("Finding '$target' on screen...")
+
+                    JarvisAccessibilityService.instance?.performAutonomousClick(target) { success, msg ->
+                        onStatusLog(msg)
+                        val reply = if (success) "Maine screen par '$target' click kar diya hai boss." else "Screen par '$target' nahi mila."
+                        messages.add(ChatMessage(text = msg, isUser = false))
+                        ttsEngine.speak(reply, voiceName = prefs.selectedVoice, rate = prefs.voiceRate, pitch = prefs.voicePitch)
+                    }
+                }
+
                 IntentType.CODE_TASK -> {
                     onOrbStateChanged(OrbState.EXECUTING)
                     val title = decision.projectTitle ?: "New Project"

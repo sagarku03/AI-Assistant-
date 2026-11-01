@@ -33,6 +33,11 @@ class WakeWordEngine(
 
     private val supportedWakeWords = listOf(
         "hey jarvis",
+        "ok jarvis",
+        "okay jarvis",
+        "jarvis suno",
+        "o jarvis suno",
+        "oh jarvis suno",
         "suno jarvis",
         "o jarvis",
         "oh jarvis",

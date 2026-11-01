@@ -65,7 +65,7 @@ class FloatingArcOrbService : Service(), LifecycleOwner, SavedStateRegistryOwner
 
         return NotificationCompat.Builder(this, JarvisApplication.CHANNEL_ID_ORB)
             .setContentTitle("JARVIS Active")
-            .setContentText("Arc Orb is active. Say 'Hey Jarvis' or tap orb.")
+            .setContentText("Arc Orb is active. Say 'Hey Jarvis' or 'Jarvis Suno'.")
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)

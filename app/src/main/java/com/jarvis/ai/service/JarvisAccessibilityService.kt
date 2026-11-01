@@ -72,6 +72,40 @@ class JarvisAccessibilityService : AccessibilityService() {
         return hybridFinder.typeIntoInputField(rootInActiveWindow, text)
     }
 
+    /**
+     * Captures a high-resolution snapshot of the current screen for Gemini Vision processing.
+     * Uses Android 11+ native AccessibilityService screenshot API with zero user prompts.
+     */
+    fun takeScreenSnapshot(onBitmapReady: (android.graphics.Bitmap?) -> Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            takeScreenshot(
+                android.view.Display.DEFAULT_DISPLAY,
+                androidx.core.content.ContextCompat.getMainExecutor(this),
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshotResult: ScreenshotResult) {
+                        try {
+                            val hardwareBuffer = screenshotResult.hardwareBuffer
+                            val colorSpace = screenshotResult.colorSpace
+                            val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(hardwareBuffer, colorSpace)
+                                ?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                            hardwareBuffer.close()
+                            onBitmapReady(bitmap)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            onBitmapReady(null)
+                        }
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        onBitmapReady(null)
+                    }
+                }
+            )
+        } else {
+            onBitmapReady(null)
+        }
+    }
+
     fun getActivePackage(): String? = currentPackageName
 
     override fun onDestroy() {

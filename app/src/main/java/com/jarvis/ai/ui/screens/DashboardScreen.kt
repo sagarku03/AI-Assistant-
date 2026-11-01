@@ -100,6 +100,7 @@ fun DashboardScreen(
     var showApiKeyCard by remember { mutableStateOf(prefs.geminiApiKey.isBlank()) }
     var selectedModel by remember { mutableStateOf(prefs.selectedModel) }
     var isModelDropdownExpanded by remember { mutableStateOf(false) }
+    var isScreenVisionEnabled by remember { mutableStateOf(prefs.isScreenVisionEnabled) }
 
     // Runtime Permission for Microphone
     var hasMicPermission by remember {
@@ -449,7 +450,7 @@ fun DashboardScreen(
                     text = when (orbState) {
                         OrbState.IDLE -> "Standby • Tap Orb or Type Below"
                         OrbState.LISTENING -> "Listening to your voice..."
-                        OrbState.THINKING -> "Thinking with Gemini 2.0..."
+                        OrbState.THINKING -> "Thinking with $selectedModel..."
                         OrbState.EXECUTING -> "Executing Autonomous Action..."
                     },
                     fontSize = 13.sp,
@@ -468,6 +469,92 @@ fun DashboardScreen(
                     maxLines = 2
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Screen Vision AI Control Card
+            item {
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    contentPadding = 12.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .glassmorphic(
+                                        shape = RoundedCornerShape(12.dp),
+                                        backgroundColor = if (isScreenVisionEnabled) Color(0x3300F2FE) else Color(0x15FFFFFF)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.TouchApp,
+                                    contentDescription = null,
+                                    tint = if (isScreenVisionEnabled) JarvisCyan else TextSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Screen Vision AI",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                color = if (isScreenVisionEnabled) Color(0x2200E676) else Color(0x229E9E9E),
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isScreenVisionEnabled) "ACTIVE" else "DISABLED",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isScreenVisionEnabled) NeonLime else TextSecondary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isScreenVisionEnabled) "Reads screen & clicks buttons using Gemini 3.8 Flash" else "Screen reading & clicks are disabled for privacy",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+
+                        PillButton(
+                            text = if (isScreenVisionEnabled) "Disable" else "Enable",
+                            style = if (isScreenVisionEnabled) PillButtonStyle.GLASS_TRANSLUCENT else PillButtonStyle.GRADIENT_CYAN,
+                            onClick = {
+                                val newState = !isScreenVisionEnabled
+                                isScreenVisionEnabled = newState
+                                prefs.isScreenVisionEnabled = newState
+                                Toast.makeText(
+                                    context,
+                                    if (newState) "Screen Vision Activated!" else "Screen Vision Deactivated (Privacy Mode)",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                    }
+                }
             }
 
             // 4. Quick Actions Row (Floating Arc Orb + Code Studio)
@@ -555,7 +642,8 @@ fun DashboardScreen(
             }
 
             // 5. System Privileges Checklist (Only if permission missing)
-            if (!hasMicPermission || !hasOverlayPermission) {
+            val hasAccessibility = com.jarvis.ai.service.JarvisAccessibilityService.instance != null
+            if (!hasMicPermission || !hasOverlayPermission || !hasAccessibility) {
                 item {
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
@@ -597,6 +685,20 @@ fun DashboardScreen(
                                             )
                                             context.startActivity(intent)
                                         }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+
+                            if (!hasAccessibility) {
+                                PermissionRow(
+                                    icon = Icons.Rounded.TouchApp,
+                                    title = "Accessibility Service",
+                                    subtitle = "Required to see screen & click buttons autonomously",
+                                    isGranted = false,
+                                    onClick = {
+                                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                        context.startActivity(intent)
                                     }
                                 )
                             }

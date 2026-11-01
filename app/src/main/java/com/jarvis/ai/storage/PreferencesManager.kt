@@ -22,12 +22,15 @@ class PreferencesManager(context: Context) {
         private const val KEY_VOICE_PITCH = "voice_pitch"
         private const val KEY_PROJECTS_DIR = "projects_dir"
         private const val KEY_AUTONOMOUS_ACTIONS = "autonomous_actions"
+        private const val KEY_SCREEN_VISION_ENABLED = "screen_vision_enabled"
 
         val AVAILABLE_MODELS = listOf(
-            "gemini-1.5-flash",
+            "gemini-3.8-flash",
+            "gemini-3.8-live",
+            "gemini-4-argon",
+            "gemini-2.5-flash",
             "gemini-2.0-flash",
-            "gemini-2.0-flash-exp",
-            "gemini-1.5-pro"
+            "gemini-1.5-flash"
         )
 
         @Volatile
@@ -47,10 +50,14 @@ class PreferencesManager(context: Context) {
         }
 
     var selectedModel: String
-        get() = prefs.getString(KEY_SELECTED_MODEL, "gemini-1.5-flash") ?: "gemini-1.5-flash"
+        get() = prefs.getString(KEY_SELECTED_MODEL, "gemini-3.8-flash") ?: "gemini-3.8-flash"
         set(value) {
             prefs.edit().putString(KEY_SELECTED_MODEL, value.trim()).commit()
         }
+
+    var isScreenVisionEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SCREEN_VISION_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_SCREEN_VISION_ENABLED, value).apply()
 
     var isWakeWordEnabled: Boolean
         get() = prefs.getBoolean(KEY_WAKE_WORD_ENABLED, true)
