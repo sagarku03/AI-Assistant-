@@ -117,7 +117,7 @@ fun CodeSandboxScreen(
                 <div class="glass-card">
                     <h1>JARVIS Studio</h1>
                     <p>This interactive website was autonomously coded & deployed directly on your mobile device by JARVIS.</p>
-                    <button class="btn" onclick="alert('Hello from JARVIS!')">Test Interaction</button>
+                    <button class="btn" onclick="document.querySelector('p').innerText='System Status: Operational 100%'">Click to Interact</button>
                 </div>
             </body>
             </html>
@@ -217,6 +217,17 @@ fun CodeSandboxScreen(
                             settings.domStorageEnabled = true
                             setBackgroundColor(0xFF08090C.toInt())
                             webViewClient = WebViewClient()
+                            webChromeClient = object : android.webkit.WebChromeClient() {
+                                override fun onJsAlert(
+                                    view: WebView?,
+                                    url: String?,
+                                    message: String?,
+                                    result: android.webkit.JsResult?
+                                ): Boolean {
+                                    result?.confirm()
+                                    return true
+                                }
+                            }
                             loadDataWithBaseURL(null, sampleGeneratedHtml, "text/html", "UTF-8", null)
                         }
                     },

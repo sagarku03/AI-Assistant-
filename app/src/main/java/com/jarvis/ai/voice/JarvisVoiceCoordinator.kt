@@ -27,6 +27,7 @@ data class ChatMessage(
 /**
  * Central Orchestrator for Project JARVIS.
  * Glues Dual Input (Keyboard Text + Hands-Free Voice) -> Gemini Conversational Brain -> Natural Edge TTS -> System Action Execution.
+ * Guarantees zero mic conflict with clean audio handoff between WakeWordEngine and SpeechToTextManager.
  */
 class JarvisVoiceCoordinator(
     private val context: Context,
@@ -51,10 +52,12 @@ class JarvisVoiceCoordinator(
         onPlaybackCompleted = {
             onOrbStateChanged(OrbState.IDLE)
             onStatusLog("Standby • Ready for your command")
+            resumeWakeWordListener()
         },
         onError = { err ->
             onStatusLog("Voice notice: $err")
             onOrbStateChanged(OrbState.IDLE)
+            resumeWakeWordListener()
         }
     )
 
@@ -72,6 +75,7 @@ class JarvisVoiceCoordinator(
         onError = { err ->
             onStatusLog("STT: $err")
             onOrbStateChanged(OrbState.IDLE)
+            resumeWakeWordListener()
         }
     )
 
@@ -81,8 +85,8 @@ class JarvisVoiceCoordinator(
             onStatusLog("Wake word triggered: \"$phrase\"")
             onWakeWordTriggered()
         },
-        onAudioAmplitude = {
-            // Idle acoustic feedback
+        onAudioAmplitude = { amp ->
+            onAudioAmplitude(amp)
         }
     )
 
@@ -92,9 +96,7 @@ class JarvisVoiceCoordinator(
         if (apiKey.isNotBlank()) {
             brainClient.setApiKey(apiKey)
         }
-        if (prefs.isWakeWordEnabled) {
-            wakeWordEngine.startListening()
-        }
+        resumeWakeWordListener()
         onStatusLog("JARVIS Initialized • Ready")
         if (messages.isEmpty()) {
             messages.add(
@@ -106,18 +108,28 @@ class JarvisVoiceCoordinator(
         }
     }
 
+    private fun resumeWakeWordListener() {
+        if (prefs.isWakeWordEnabled) {
+            wakeWordEngine.startListening()
+        }
+    }
+
     /**
      * Triggered when hands-free wake word is spoken or when the Arc Orb / Mic is tapped.
+     * Stops WakeWordEngine audio recording first so the microphone is 100% free for SpeechRecognizer!
      */
     fun onWakeWordTriggered() {
-        // 1. Barge-In: Stop any active speech immediately
+        // 1. Barge-In: Stop active speech immediately
         ttsEngine.stop()
 
-        // 2. Set UI to Listening state
+        // 2. Stop wake-word audio record so SpeechRecognizer has exclusive mic access
+        wakeWordEngine.stopListening()
+
+        // 3. Set UI to Listening state
         onOrbStateChanged(OrbState.LISTENING)
         onStatusLog("Listening to Boss...")
 
-        // 3. Start high-accuracy speech recognition
+        // 4. Start high-accuracy speech recognition
         speechToText.startListening(languageCode = "hi-IN")
     }
 
@@ -127,6 +139,7 @@ class JarvisVoiceCoordinator(
     fun processUserText(text: String) {
         if (text.isBlank()) return
         ttsEngine.stop()
+        wakeWordEngine.stopListening()
         handleUserInput(text.trim(), isVoice = false)
     }
 
@@ -134,7 +147,6 @@ class JarvisVoiceCoordinator(
      * Unified processor for both voice transcripts and keyboard typed text.
      */
     private fun handleUserInput(inputText: String, isVoice: Boolean) {
-        // Append user message to chat UI
         messages.add(ChatMessage(text = inputText, isUser = true))
 
         onStatusLog("Processing: \"$inputText\"")
@@ -143,7 +155,6 @@ class JarvisVoiceCoordinator(
         scope.launch {
             val decision: JarvisDecision = brainClient.processUserSpeech(inputText)
 
-            // Append assistant response to chat UI
             messages.add(ChatMessage(text = decision.displayResponse, isUser = false))
 
             when (decision.intentType) {
@@ -172,7 +183,7 @@ class JarvisVoiceCoordinator(
                             JarvisAccessibilityService.instance?.performAutonomousClick(buttonText) { success, msg ->
                                 onStatusLog(msg)
                             }
-                        }, 1200) // Delay for app window load
+                        }, 1200)
                     }
 
                     // 3. Speak natural voice confirmation
@@ -189,7 +200,6 @@ class JarvisVoiceCoordinator(
                     val title = decision.projectTitle ?: "New Project"
                     onStatusLog("Generated Code Project: $title")
 
-                    // Save generated code to disk for instant live preview in Code Sandbox
                     decision.generatedCode?.let { code ->
                         projectFileManager.saveWebProject(title, code)
                     }

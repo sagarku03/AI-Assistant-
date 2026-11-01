@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 
 /**
  * Permanent SharedPreferences Manager for Project JARVIS.
- * Retains Gemini API key, selected voice model, wake words, and chat settings across app restarts.
+ * Retains Gemini API key, selected active AI model, voice model, wake words, and settings across app restarts.
  */
 class PreferencesManager(context: Context) {
 
@@ -15,12 +15,20 @@ class PreferencesManager(context: Context) {
     companion object {
         private const val PREFS_NAME = "jarvis_preferences"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
+        private const val KEY_SELECTED_MODEL = "selected_gemini_model"
         private const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
         private const val KEY_SELECTED_VOICE = "selected_voice"
         private const val KEY_VOICE_RATE = "voice_rate"
         private const val KEY_VOICE_PITCH = "voice_pitch"
         private const val KEY_PROJECTS_DIR = "projects_dir"
         private const val KEY_AUTONOMOUS_ACTIONS = "autonomous_actions"
+
+        val AVAILABLE_MODELS = listOf(
+            "gemini-1.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-pro"
+        )
 
         @Volatile
         private var instance: PreferencesManager? = null
@@ -34,7 +42,15 @@ class PreferencesManager(context: Context) {
 
     var geminiApiKey: String
         get() = prefs.getString(KEY_GEMINI_API_KEY, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_GEMINI_API_KEY, value.trim()).apply()
+        set(value) {
+            prefs.edit().putString(KEY_GEMINI_API_KEY, value.trim()).commit()
+        }
+
+    var selectedModel: String
+        get() = prefs.getString(KEY_SELECTED_MODEL, "gemini-1.5-flash") ?: "gemini-1.5-flash"
+        set(value) {
+            prefs.edit().putString(KEY_SELECTED_MODEL, value.trim()).commit()
+        }
 
     var isWakeWordEnabled: Boolean
         get() = prefs.getBoolean(KEY_WAKE_WORD_ENABLED, true)

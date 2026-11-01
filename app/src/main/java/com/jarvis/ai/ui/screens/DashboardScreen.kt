@@ -25,12 +25,15 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Key
@@ -38,6 +41,9 @@ import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -92,6 +98,8 @@ fun DashboardScreen(
     var apiKeyInput by remember { mutableStateOf(prefs.geminiApiKey) }
     var isKeySaved by remember { mutableStateOf(prefs.geminiApiKey.isNotBlank()) }
     var showApiKeyCard by remember { mutableStateOf(prefs.geminiApiKey.isBlank()) }
+    var selectedModel by remember { mutableStateOf(prefs.selectedModel) }
+    var isModelDropdownExpanded by remember { mutableStateOf(false) }
 
     // Runtime Permission for Microphone
     var hasMicPermission by remember {
@@ -185,20 +193,87 @@ fun DashboardScreen(
                         )
                     }
 
-                    // Connection Status & Key Badge
+                    // Active Model Dropdown & Connection Status & Key Badge
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // 1. Model Selector Pill with Dropdown
+                        Box(
+                            modifier = Modifier
+                                .glassmorphic(shape = RoundedCornerShape(16.dp))
+                                .clickable { isModelDropdownExpanded = true }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Tune,
+                                    contentDescription = null,
+                                    tint = JarvisCyan,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = selectedModel.removePrefix("gemini-"),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = JarvisCyan
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = JarvisCyan,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = isModelDropdownExpanded,
+                                onDismissRequest = { isModelDropdownExpanded = false }
+                            ) {
+                                PreferencesManager.AVAILABLE_MODELS.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (model == selectedModel) {
+                                                    Icon(
+                                                        Icons.Rounded.CheckCircle,
+                                                        contentDescription = null,
+                                                        tint = NeonLime,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(Modifier.width(6.dp))
+                                                }
+                                                Text(
+                                                    text = model,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (model == selectedModel) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (model == selectedModel) NeonLime else Color.White
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            prefs.selectedModel = model
+                                            selectedModel = model
+                                            isModelDropdownExpanded = false
+                                            Toast.makeText(context, "Active Model: $model", Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // 2. API Key Badge (Clickable to open Settings)
                         Box(
                             modifier = Modifier
                                 .glassmorphic(shape = RoundedCornerShape(16.dp))
                                 .clickable { showApiKeyCard = !showApiKeyCard }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Rounded.Key,
                                     contentDescription = null,
                                     tint = if (isKeySaved) NeonLime else JarvisCyan,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
@@ -210,12 +285,13 @@ fun DashboardScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
+                        // 3. Online Status Badge
                         Box(
                             modifier = Modifier
                                 .glassmorphic(shape = RoundedCornerShape(16.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
@@ -223,7 +299,7 @@ fun DashboardScreen(
                                         .size(8.dp)
                                         .background(NeonLime, CircleShape)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "ONLINE",
                                     fontSize = 10.sp,
@@ -236,7 +312,7 @@ fun DashboardScreen(
                 }
             }
 
-            // 2. Expandable Persistent API Key Card
+            // 2. Expandable Persistent API Key & AI Model Settings Card
             item {
                 AnimatedVisibility(visible = showApiKeyCard) {
                     GlassCard(
@@ -255,7 +331,7 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Google Gemini 2.0 Flash API Key",
+                                    text = "Google Gemini AI Settings",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = TextPrimary
@@ -263,11 +339,50 @@ fun DashboardScreen(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Free tier: 1,500 req/day from Google AI Studio. Saved permanently in SharedPreferences.",
+                                text = "Free tier: 1,500 req/day from Google AI Studio. Stored permanently on device.",
                                 fontSize = 11.sp,
                                 color = TextSecondary
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Select Active AI Model:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = JarvisCyan
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            // Model selector chips row
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                PreferencesManager.AVAILABLE_MODELS.forEach { model ->
+                                    val isSelected = model == selectedModel
+                                    Box(
+                                        modifier = Modifier
+                                            .glassmorphic(
+                                                shape = RoundedCornerShape(12.dp),
+                                                backgroundColor = if (isSelected) Color(0x3300F0FF) else Color(0x150A1428)
+                                            )
+                                            .clickable {
+                                                prefs.selectedModel = model
+                                                selectedModel = model
+                                                Toast.makeText(context, "Active: $model", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = model,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) NeonLime else TextSecondary
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -276,7 +391,7 @@ fun DashboardScreen(
                                     value = apiKeyInput,
                                     onValueChange = { apiKeyInput = it },
                                     placeholder = {
-                                        Text("Paste free API key (Permanent)", color = TextMuted, fontSize = 12.sp)
+                                        Text("Paste Gemini API Key", color = TextMuted, fontSize = 12.sp)
                                     },
                                     modifier = Modifier.weight(1f),
                                     singleLine = true,
@@ -290,7 +405,7 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 PillButton(
-                                    text = if (isKeySaved) "Save" else "Save",
+                                    text = "Save",
                                     style = PillButtonStyle.GRADIENT_CYAN,
                                     onClick = {
                                         if (apiKeyInput.isNotBlank()) {
@@ -298,7 +413,7 @@ fun DashboardScreen(
                                             coordinator?.initialize(apiKeyInput.trim())
                                             isKeySaved = true
                                             showApiKeyCard = false
-                                            Toast.makeText(context, "API Key permanently saved on device!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Settings saved permanently on device!", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 )

@@ -38,7 +38,6 @@ class SpeechToTextManager(
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageCode)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageCode)
-                    putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, languageCode)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 }
@@ -58,7 +57,6 @@ class SpeechToTextManager(
         override fun onBeginningOfSpeech() {}
 
         override fun onRmsChanged(rmsdB: Float) {
-            // Normalize dB value (-2 to 10 dB) to 0.0 - 1.0 range for the Arc Orb animation
             val normalized = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
             onAudioAmplitude(normalized)
         }
