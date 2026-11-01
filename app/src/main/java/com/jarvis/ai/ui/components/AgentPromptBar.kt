@@ -44,7 +44,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jarvis.ai.ui.theme.JarvisCyan
-import com.jarvis.ai.ui.theme.JarvisNavy
+import com.jarvis.ai.ui.theme.JarvisBlue
 import com.jarvis.ai.ui.theme.NeonLime
 import com.jarvis.ai.ui.theme.TextMuted
 import com.jarvis.ai.ui.theme.TextPrimary
@@ -114,7 +114,8 @@ fun AgentPromptBar(
                 .glassmorphic(
                     shape = RoundedCornerShape(28.dp),
                     backgroundColor = Color(0x330A1428),
-                    borderColor = Color(0x3300F0FF)
+                    borderTopLeft = Color(0x4400F0FF),
+                    borderBottomRight = Color(0x1100F0FF)
                 )
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
@@ -163,7 +164,7 @@ fun AgentPromptBar(
                         modifier = Modifier
                             .size(42.dp)
                             .background(
-                                brush = Brush.linearGradient(listOf(JarvisCyan, JarvisNavy)),
+                                brush = Brush.linearGradient(listOf(JarvisCyan, JarvisBlue)),
                                 shape = CircleShape
                             )
                             .clickable {

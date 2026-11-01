@@ -548,7 +548,8 @@ private fun ChatBubble(message: ChatMessage) {
                         bottomEnd = if (message.isUser) 4.dp else 16.dp
                     ),
                     backgroundColor = if (message.isUser) Color(0x3300F0FF) else Color(0x220A1428),
-                    borderColor = if (message.isUser) Color(0x5500F0FF) else Color(0x33FFFFFF)
+                    borderTopLeft = if (message.isUser) Color(0x5500F0FF) else Color(0x33FFFFFF),
+                    borderBottomRight = if (message.isUser) Color(0x2200F0FF) else Color(0x11FFFFFF)
                 )
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {

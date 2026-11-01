@@ -191,7 +191,7 @@ class JarvisVoiceCoordinator(
 
                     // Save generated code to disk for instant live preview in Code Sandbox
                     decision.generatedCode?.let { code ->
-                        projectFileManager.saveProject(title, code)
+                        projectFileManager.saveWebProject(title, code)
                     }
 
                     ttsEngine.speak(
