@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">JARVIS AI</string>
+    <string name="accessibility_service_description">JARVIS autonomous screen intelligence and gesture automation engine. Allows JARVIS to view screen elements and click buttons when instructed.</string>
+</resources>
